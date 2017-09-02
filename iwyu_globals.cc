@@ -384,7 +384,7 @@ void AddGlobToReportIWYUViolationsFor(const string& glob) {
   commandline_flags->check_also.insert(NormalizeFilePath(glob));
 }
 
-bool ShouldReportIWYUViolationsFor(const clang::FileEntry* file) {
+bool ComputeWhetherToReportIWYUViolationsFor(const clang::FileEntry* file) {
   const string filepath = GetFilePath(file);
   for (const string& glob : GlobalFlags().check_also)
     if (GlobMatchesPath(glob.c_str(), filepath.c_str()))

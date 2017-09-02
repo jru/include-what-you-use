@@ -33,7 +33,7 @@ bool ShouldPrintSymbolFromFile(const FileEntry* file) {
   if (GetVerboseLevel() < 5) {
     return false;
   } else if (GetVerboseLevel() < 10) {
-    return ShouldReportIWYUViolationsFor(file);
+    return ComputeWhetherToReportIWYUViolationsFor(file);
   } else if (GetVerboseLevel() < 11) {
     return !IsSystemIncludeFile(GetFilePath(file));
   } else {

@@ -242,6 +242,7 @@ class IwyuFileInfo {
   // Called when using a macro in this file.
   void ReportMacroUse(clang::SourceLocation use_loc,
                       clang::SourceLocation dfn_loc,
+                      const clang::FileEntry* dfn_file,
                       const string& symbol);
 
   // Called when somebody uses a macro defined in this file.

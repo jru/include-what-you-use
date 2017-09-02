@@ -166,6 +166,8 @@ class IwyuPreprocessorInfo : public clang::PPCallbacks,
   bool ForwardDeclareIsInhibited(
       const clang::FileEntry* file, const string& qualified_symbol_name) const;
 
+  bool ShouldReportIWYUViolationsFor(const clang::FileEntry* file) const;
+
  protected:
   // Preprocessor event handlers called by Clang.
   void MacroExpands(const clang::Token& macro_use_token,
@@ -264,6 +266,7 @@ class IwyuPreprocessorInfo : public clang::PPCallbacks,
   // Checks whether it's OK to use the given macro defined in file defined_in.
   void ReportMacroUse(const string& name,
                       clang::SourceLocation usage_location,
+                      const clang::FileEntry* usage_file,
                       clang::SourceLocation dfn_location);
 
   // As above, but get the definition location from macros_definition_loc_.

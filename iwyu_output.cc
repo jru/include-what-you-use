@@ -587,9 +587,10 @@ void IwyuFileInfo::ReportFullSymbolUse(SourceLocation use_loc,
 
 void IwyuFileInfo::ReportMacroUse(clang::SourceLocation use_loc,
                                   clang::SourceLocation dfn_loc,
+                                  const clang::FileEntry* dfn_file,
                                   const string& symbol) {
-  symbol_uses_.push_back(OneUse(symbol, GetFileEntry(dfn_loc),
-                                GetFilePath(dfn_loc), use_loc));
+  symbol_uses_.push_back(OneUse(symbol, dfn_file,
+                                GetFilePath(dfn_file), use_loc));
   LogSymbolUse("Marked full-info use of macro", symbol_uses_.back());
 }
 
@@ -1902,7 +1903,7 @@ void IwyuFileInfo::HandlePreprocessingDone() {
   if (is_prefix_header()) {
     return;
   }
-  bool should_report_violations = ShouldReportIWYUViolationsFor(file_);
+  bool should_report_violations = preprocessor_info_->ShouldReportIWYUViolationsFor(file_);
   std::list<const FileEntry*> direct_macro_use_includees;
   std::set_intersection(macro_users_.begin(), macro_users_.end(),
                         direct_includes_as_fileentries_.begin(),

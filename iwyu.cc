@@ -234,21 +234,6 @@ string IntToString(int i) {
   return buf;
 }
 
-bool CanIgnoreLocation(SourceLocation loc) {
-  // If we're in a macro expansion, we always want to treat this as
-  // being in the expansion location, never the as-written location,
-  // since that's what the compiler does.  CanIgnoreCurrentASTNode()
-  // is an optimization, so we want to be conservative about what we
-  // ignore.
-  const FileEntry* file_entry = GetFileEntry(loc);
-  const FileEntry* file_entry_after_macro_expansion =
-      GetFileEntry(GetInstantiationLoc(loc));
-
-  // ignore symbols used outside foo.{h,cc} + check_also
-  return (!ShouldReportIWYUViolationsFor(file_entry) &&
-          !ShouldReportIWYUViolationsFor(file_entry_after_macro_expansion));
-}
-
 }  // anonymous namespace
 
 // ----------------------------------------------------------------------
@@ -3916,6 +3901,21 @@ class IwyuAstConsumer
   }
 
  private:
+
+  bool CanIgnoreLocation(SourceLocation loc) const {
+    auto const& procInfo = preprocessor_info();
+
+    // If we're in a macro expansion, we always want to treat this as
+    // being in the expansion location, never the as-written location,
+    // since that's what the compiler does.  CanIgnoreCurrentASTNode()
+    // is an optimization, so we want to be conservative about what we
+    // ignore.
+
+    // ignore symbols used outside foo.{h,cc} + check_also
+    return !procInfo.ShouldReportIWYUViolationsFor(GetFileEntry(loc)) &&
+           !procInfo.ShouldReportIWYUViolationsFor(GetFileEntry(GetInstantiationLoc(loc)));
+  }
+
   // Class we call to handle instantiated template functions and classes.
   InstantiatedTemplateVisitor instantiated_template_visitor_;
 };  // class IwyuAstConsumer

@@ -478,7 +478,7 @@ void IwyuPreprocessorInfo::AddDirectInclude(
   // both forms of the includee to be specified.  For other files, we
   // don't care as much.
   const FileEntry* includer = GetFileEntry(includer_loc);
-  if (ShouldReportIWYUViolationsFor(includer)) {
+  if (ComputeWhetherToReportIWYUViolationsFor(includer)) {
     CHECK_(includee != nullptr);
     CHECK_(!include_name_as_written.empty());
   }
@@ -566,18 +566,21 @@ void IwyuPreprocessorInfo::MacroExpands(const Token& macro_use_token,
                                         const MacroDefinition& definition,
                                         SourceRange range,
                                         const clang::MacroArgs* /*args*/) {
-  const FileEntry* macro_file = GetFileEntry(macro_use_token);
-  const MacroInfo* macro_def = definition.getMacroInfo();
-  if (ShouldPrintSymbolFromFile(macro_file)) {
+
+  const auto def_loc = definition.getMacroInfo()->getDefinitionLoc();
+  const auto use_loc = macro_use_token.getLocation();
+  const auto use_file = GetFileEntry(use_loc);
+  const auto use_name = GetName(macro_use_token);
+
+  if (ShouldPrintSymbolFromFile(use_file)) {
+
     errs() << "[ Use macro   ] "
-           << PrintableLoc(macro_use_token.getLocation())
-           << ": " << GetName(macro_use_token) << " "
-           << "(from " << PrintableLoc(macro_def->getDefinitionLoc()) << ")\n";
+           << PrintableLoc(use_loc)
+           << ": " << use_name << " "
+           << "(from " << PrintableLoc(def_loc) << ")\n";
   }
 
-  ReportMacroUse(GetName(macro_use_token),
-                 macro_use_token.getLocation(),
-                 macro_def->getDefinitionLoc());
+  ReportMacroUse(use_name, use_loc, use_file, def_loc);
 }
 
 void IwyuPreprocessorInfo::MacroDefined(const Token& id,
@@ -698,7 +701,7 @@ void IwyuPreprocessorInfo::FileSkipped(const FileEntry& file,
       << " (" << GetFilePath(&file) << ")\n";
 
   AddDirectInclude(include_loc, &file, include_name_as_written);
-  if (ShouldReportIWYUViolationsFor(&file)) {
+  if (ComputeWhetherToReportIWYUViolationsFor(&file)) {
     files_to_report_iwyu_violations_for_.insert(&file);
   }
 }
@@ -739,7 +742,7 @@ void IwyuPreprocessorInfo::FileChanged_EnterFile(
              << GetFilePath(new_file) << "\n";
     AddGlobToReportIWYUViolationsFor(GetFilePath(new_file));
   }
-  if (ShouldReportIWYUViolationsFor(new_file)) {
+  if (ComputeWhetherToReportIWYUViolationsFor(new_file)) {
     files_to_report_iwyu_violations_for_.insert(new_file);
   }
 
@@ -789,12 +792,15 @@ void IwyuPreprocessorInfo::FileChanged_SystemHeaderPragma(SourceLocation loc) {
 // Checks whether it's OK to use the given macro defined in file defined_in.
 void IwyuPreprocessorInfo::ReportMacroUse(const string& name,
                                           SourceLocation usage_location,
+                                          const FileEntry* usage_file,
                                           SourceLocation dfn_location) {
+  const FileEntry* dfn_file = GetFileEntry(dfn_location);
+
   // Don't report macro uses that aren't actually in a file somewhere.
-  if (!dfn_location.isValid() || GetFilePath(dfn_location) == "<built-in>")
+  if (!dfn_location.isValid() || dfn_file == nullptr)
     return;
-  const FileEntry* used_in = GetFileEntry(usage_location);
-  if (ShouldReportIWYUViolationsFor(used_in)) {
+
+  if (ShouldReportIWYUViolationsFor(usage_file)) {
     // ignore symbols used outside foo.{h,cc}
 
     // TODO(csilvers): this isn't really a symbol use -- it may be ok
@@ -808,11 +814,10 @@ void IwyuPreprocessorInfo::ReportMacroUse(const string& name,
     // #include foo.h -- adding that #include could break bang.cc.
     // I think the solution is to have a 'soft' use -- don't remove it
     // if it's there, but don't add it if it's not.  Or something.
-    GetFromFileInfoMap(used_in)->ReportMacroUse(usage_location, dfn_location,
-                                                name);
+    GetFromFileInfoMap(usage_file)->ReportMacroUse(usage_location, dfn_location,
+                                                   dfn_file, name);
   }
-  const FileEntry* defined_in = GetFileEntry(dfn_location);
-  GetFromFileInfoMap(defined_in)->ReportDefinedMacroUse(used_in);
+  GetFromFileInfoMap(dfn_file)->ReportDefinedMacroUse(usage_file);
 }
 
 // As above, but get the definition location from macros_definition_loc_.
@@ -820,7 +825,7 @@ void IwyuPreprocessorInfo::FindAndReportMacroUse(const string& name,
                                                  SourceLocation loc) {
   if (const SourceLocation* dfn_loc
       = FindInMap(&macros_definition_loc_, name)) {
-    ReportMacroUse(name, loc, *dfn_loc);
+    ReportMacroUse(name, loc, GetFileEntry(loc), *dfn_loc);
   }
 }
 
@@ -1084,6 +1089,11 @@ bool IwyuPreprocessorInfo::ForwardDeclareIsInhibited(
       FindInMap(&no_forward_declare_map_, file);
   return (inhibited_forward_declares != nullptr) &&
       ContainsKey(*inhibited_forward_declares, normalized_symbol_name);
+}
+
+bool IwyuPreprocessorInfo::ShouldReportIWYUViolationsFor(
+    const clang::FileEntry* file) const {
+      return files_to_report_iwyu_violations_for_.count(file) > 0;
 }
 
 }  // namespace include_what_you_use

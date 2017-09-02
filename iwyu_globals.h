@@ -126,7 +126,7 @@ FullUseCache* ClassMembersFullUseCache();
 // They are specified as glob file-patterns (which behave just as they
 // do in the shell).  TODO(csilvers): use a prefix instead? allow '...'?
 void AddGlobToReportIWYUViolationsFor(const string& glob);
-bool ShouldReportIWYUViolationsFor(const clang::FileEntry* file);
+bool ComputeWhetherToReportIWYUViolationsFor(const clang::FileEntry* file);
 
 }  // namespace include_what_you_use
 
