@@ -1026,6 +1026,15 @@ IwyuFileInfo* IwyuPreprocessorInfo::FileInfoFor(const FileEntry* file) const {
   return const_cast<IwyuFileInfo*>(FindInMap(&iwyu_file_info_map_, file));
 }
 
+IwyuFileInfo const* IwyuPreprocessorInfo::FileInfoForPCH() const {
+  for (auto const& info: iwyu_file_info_map_)
+  {
+    if (info.second.is_pch_in_code())
+      return &info.second;
+  }
+  return nullptr;
+}
+
 const IwyuFileInfo& IwyuPreprocessorInfo::FileInfoOrEmptyFor(
     const FileEntry* file) const {
   const IwyuFileInfo* retval = FindInMap(&iwyu_file_info_map_, file);

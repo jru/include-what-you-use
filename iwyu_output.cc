@@ -1439,6 +1439,29 @@ void IwyuFileInfo::CalculateIwyuViolations(vector<OneUse>* uses) {
   const set<string> effective_direct_includes
       = Union(associated_direct_includes, direct_includes());
 
+  // If we are in the main or associated files and in "hub" mode, then
+  // ignore all uses coming from headers already included direclty or
+  // indirectly in the PCH file.
+  if (GlobalFlags().pch_in_code &&
+      (preprocessor_info_->main_file() ||
+       preprocessor_info_->FileInfoFor(preprocessor_info_->main_file())
+                         ->associated_headers_.count(this) > 0))
+  {
+    auto const pchHub = preprocessor_info_->FileInfoForPCH();
+    CHECK_(pchHub != nullptr);
+
+    for (auto& use: *uses)
+    {
+      if (!use.symbol_name().empty() &&
+          preprocessor_info_->FileTransitivelyIncludes(pchHub->file_, use.decl_file()))
+      {
+        use.set_ignore_use();
+        VERRS(6) << "Ignoring full use of " << use.symbol_name()
+                 << " (" << use.PrintableUseLoc() << "): already included in the PCH\n";
+      }
+    }
+  }
+
   // (C2) + (C3) Find the minimal 'set cover' for all symbol uses.
   const set<string>& desired_set_cover = internal::CalculateMinimalIncludes(
       direct_includes(), associated_direct_includes, uses);

@@ -120,6 +120,8 @@ class IwyuPreprocessorInfo : public clang::PPCallbacks,
   // Be careful if using this method in threaded contexts.
   IwyuFileInfo* FileInfoFor(const clang::FileEntry* file) const;
 
+  IwyuFileInfo const* FileInfoForPCH() const;
+
   // Instead of returning nullptr if no file info can be found, returns
   // an empty IwyuFileInfo struct.
   const IwyuFileInfo& FileInfoOrEmptyFor(const clang::FileEntry* file) const;
