@@ -1,0 +1,33 @@
+
+language: cpp
+
+addons:
+  apt:
+    sources:
+     - ubuntu-toolchain-r-test
+     - llvm-toolchain-trusty
+    packages:
+     - ninja-build
+     - llvm-dev
+     - libclang-dev
+     - clang
+
+before_install:
+ # Install a supported cmake version (>= 3.4.3)
+ - wget -O cmake.sh https://cmake.org/files/v3.10/cmake-3.10.0-rc1-Linux-x86_64.sh 
+ - sudo sh cmake.sh --skip-license --exclude-subdir --prefix=/usr/local
+
+ # Extract the version number from the most-recently installed LLVM
+ - VERSION=`ls -t /usr/lib/ | grep '^llvm\-' | head -n 1 | sed 's/llvm\-\(.\+\)/\1/'`
+
+script:
+ - ROOT_PATH=`llvm-config-$VERSION --prefix`
+ - BIN_PATH=`llvm-config-$VERSION --bindir`
+
+# Build IWYU
+ - mkdir build && cd build && cmake -GNinja -DIWYU_LLVM_ROOT_PATH=$ROOT_PATH -DCMAKE_C_COMPILER=$BIN_PATH/clang -DCMAKE_CXX_COMPILER=$BIN_PATH/clang++ -DCMAKE_INSTALL_PREFIX=./ ../
+ - ninja install
+
+# Test IWYU
+ - cd .. && python run_iwyu_tests.py -- $TRAVIS_BUILD_DIR/build/bin/include-what-you-use
+
