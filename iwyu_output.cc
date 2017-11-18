@@ -1130,10 +1130,15 @@ void ProcessFullUse(OneUse* use,
       use->set_ignore_use();
       return;
     }
-    const string dfn_file = GetFilePath(fn_decl);
-    if (IsDefaultNewOrDelete(fn_decl, ConvertToQuotedInclude(dfn_file))) {
-      VERRS(6) << "Ignoring use of " << use->symbol_name()
-               << " (" << use->PrintableUseLoc() << "): built-in new/delete\n";
+
+    const string new_include =
+        use->public_headers().empty()
+            ? ConvertToQuotedInclude(GetFilePath(fn_decl))
+            : use->public_headers()[0];
+
+    if (IsDefaultNewOrDelete(fn_decl, new_include)) {
+      VERRS(6) << "Ignoring use of " << use->symbol_name() << " ("
+               << use->PrintableUseLoc() << "): built-in new/delete\n";
       use->set_ignore_use();
       return;
     }

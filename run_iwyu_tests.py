@@ -62,9 +62,11 @@ class OneIwyuTest(unittest.TestCase):
     # key=cc-filename (relative to self.rootdir), value=list of flags.
     flags_map = {
       'backwards_includes.cc': [self.CheckAlsoExtension('-d*.h')],
-      'badinc.cc': [self.MappingFile('badinc.imp')],
+      'badinc.cc': [self.MappingFile('badinc.imp'), self.MappingFile('msvc.imp')],
+      'built_ins_new_included.cc': [self.MappingFile('msvc.imp')],
       'check_also.cc': [self.CheckAlsoExtension('-d1.h')],
       'implicit_ctor.cc': [self.CheckAlsoExtension('-d1.h')],
+      'iterator.cc': [self.MappingFile('msvc.imp')],
       'iwyu_stricter_than_cpp.cc': [self.CheckAlsoExtension('-autocast.h'),
                                     self.CheckAlsoExtension('-fnreturn.h'),
                                     self.CheckAlsoExtension('-typedefs.h'),
@@ -84,6 +86,7 @@ class OneIwyuTest(unittest.TestCase):
       'prefix_header_includes_keep.cc': ['--prefix_header_includes=keep'],
       'prefix_header_includes_remove.cc': ['--prefix_header_includes=remove'],
       'prefix_header_operator_new.cc': ['--prefix_header_includes=remove'],
+      'stl_container_provides_allocator.cc': [self.MappingFile('msvc.imp')]
     }
     prefix_headers = [self.Include('prefix_header_includes-d1.h'),
                       self.Include('prefix_header_includes-d2.h'),

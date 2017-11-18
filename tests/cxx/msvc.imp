@@ -1,0 +1,31 @@
+[
+    { include: [ "<corecrt_math.h>", private, "<math.h>", public ] },
+    { include: [ "<corecrt_wstdio.h>", private, "<stdio.h>", public ] },
+    { include: [ "<corecrt_wstring.h>", private, "<string.h>", public ] },
+    { include: [ "<corecrt_wtime.h>", private, "<time.h>", public ] },
+    { include: [ "<vadefs.h>", private, "<stdint.h>", public ] },
+    { include: [ "<vcruntime_new.h>", private, "<new>", public ] },
+    { include: [ "<vcruntime_string.h>", private, "<string.h>", public ] },
+    { include: [ "<vcruntime_typeinfo.h>", private, "<typeinfo>", public ] },
+    { include: [ "<xfunctional>", private, "<functional>", public ] },
+
+    { include: [ "<xutility>", private, "<xmemory0>", private ] },
+    { include: [ "<xmemory0>", private, "<xmemory>", private ] },
+    { include: [ "<xmemory>", private, "<memory>", public ] },
+
+    { include: [ "<xmemory>", private, "<list>", public ] },
+
+    { include: [ "<xstring>", private, "<string>", public ] },
+
+    { include: [ "<xtree>", private, "<map>", public ] },
+    { include: [ "<xtree>", private, "<set>", public ] },
+
+    { include: [ "<xutility>", private, "<utility>", public ] },
+    { include: [ "<xutility>", private, "<utility>", public ] },
+
+    { include: [ "<xmemory>", private, "<vector>", public ] },
+
+    { symbol: [ "std::find", private, "<algorithm>", public ] },
+    { symbol: [ "std::uninitialized_fill", private, "<memory>", public ] },
+    { symbol: [ "offsetof", private, "<stddef.h>", public ] },
+]

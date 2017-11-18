@@ -1445,6 +1445,12 @@ int main() {
   (void)(sizeof(kI1ConstInt));
   // IWYU: I1_Class is...*badinc-i1.h
   (void)(sizeof(I1_Class));
+
+  //typeof() is a GCC extension, use sizeof() as a dummy replacement
+  #ifndef __GNUC__
+    #define typeof(x) (sizeof(x)); int
+  #endif
+
   // IWYU: I1_Class is...*badinc-i1.h
   typeof(I1_Class) another_i1_class;
   (void)(another_i1_class);
@@ -1454,6 +1460,7 @@ int main() {
   // IWYU: kI1ConstInt is...*badinc-i1.h
   typeof(kI1ConstInt) another_const_int = 1;
   (void)(another_const_int);
+
   // This is a C standard macro, but is implemented via a gcc extension too.
   // IWYU: offsetof is...*<stddef.h>
   // IWYU: I1_Struct is...*badinc-i1.h
