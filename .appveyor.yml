@@ -1,0 +1,49 @@
+
+configuration: Release
+
+environment:
+  matrix:
+    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
+      MSVC_SETUP_PATH: C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvarsall.bat
+      MSVC_SETUP_ARG: x64
+      GENERATOR: Visual Studio 15 2017 Win64
+      MAKE_PROGRAM: msbuild include-what-you-use.sln /p:Configuration=%configuration%
+      LLVM_PATH: "%APPVEYOR_BUILD_FOLDER%\LLVM"
+      APPVEYOR_SAVE_CACHE_ON_ERROR: true
+
+install: 
+  - mkdir "%LLVM_PATH%"
+  - cd "%LLVM_PATH%"
+  - ps: |
+      $base = 'http://prereleases.llvm.org/win-snapshots/'
+      Invoke-WebRequest $base -OutFile snapshots.html
+      $latest=""
+      foreach($line in Get-Content .\snapshots.html) {
+          $a = $line | Select-String -Pattern 'href="(LLVM-6\.0\.0\-[^"]+)'
+          if ($a.matches.success) {
+            $latest = $a.matches.groups[1].value
+          }
+      }
+      Invoke-WebRequest "$base$latest" -OutFile installer.exe
+  - 7z x installer.exe
+
+before_build:
+  - if DEFINED MSVC_SETUP_PATH call "%MSVC_SETUP_PATH%" %MSVC_SETUP_ARG%
+  - cd %APPVEYOR_BUILD_FOLDER%
+  - mkdir build
+  - cd build
+
+build_script:
+  - cmake -G "%GENERATOR%"
+    -DIWYU_LLVM_ROOT_PATH=%LLVM_PATH%
+    "%APPVEYOR_BUILD_FOLDER%"
+
+  - "%MAKE_PROGRAM%"
+
+test_script:
+- cd %APPVEYOR_BUILD_FOLDER%
+- python "%APPVEYOR_BUILD_FOLDER%\run_iwyu_tests.py" -- "%configuration%\include-what-you-use.exe"
+- python "%APPVEYOR_BUILD_FOLDER%\fix_includes_test.py"
+
+
+cache: C:\projects\deps\LLVM\installer.exe
