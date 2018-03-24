@@ -1540,6 +1540,7 @@ int main() {
        it != local_enum_vector.end(); ++it) {
     // IWYU: I2_Enum is...*badinc-i2.h
     // IWYU: std::vector is...*<vector>
+    // IWYU: std::vector<.*>::iterator is...*<vector>
     std::find(local_enum_vector.begin(), local_enum_vector.end(), *it);
   }
   // string also uses __normal_iterator.  Let's also verify that

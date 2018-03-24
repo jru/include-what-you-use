@@ -2281,7 +2281,7 @@ class IwyuBaseAstVisitor : public BaseAstVisitor<Derived> {
     if (CanIgnoreCurrentASTNode())  return true;
 
     if (const Expr* owner_expr = GetFirstClassArgument(expr)) {
-      const Type* owner_type = GetTypeOf(owner_expr);
+      const Type* owner_type = GetTypeAsWrittenOf(owner_expr);
       // Note we report the type use is the location of owner_expr
       // (the 'a' in 'a << b' or the 'MACRO' in 'MACRO << b'), rather
       // than our location (which is the '<<').  That way, we properly

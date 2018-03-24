@@ -1070,6 +1070,15 @@ bool DeclsAreInSameClass(const Decl* decl1, const Decl* decl2) {
 
 // --- Utilities for Type.
 
+const Type* GetTypeAsWrittenOf(const Expr* expr) {
+
+  if (const ImplicitCastExpr *cast = DynCastFrom(expr)) {
+    expr = cast->getSubExprAsWritten();
+  }
+  return GetTypeOf(expr);
+}
+
+
 const Type* GetTypeOf(const Expr* expr) {
   return expr->getType().getTypePtr();
 }
