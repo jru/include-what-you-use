@@ -750,8 +750,16 @@ GetTplTypeResugarMapForFunctionExplicitTplArgs(
 static const Type* GetSugaredTypeOf(const Expr* expr) {
   // First, try to find an ImplicitCastExpr under the expr, and let that provide
   // the type. This has a higher probability of yielding a sugared type.
-  for (const Stmt* child_expr : expr->children()) {
-    if (const auto* cast_expr = dyn_cast<ImplicitCastExpr>(child_expr)) {
+  for (const Stmt* child_stmt : expr->children()) {
+
+    if (Expr const* child_expr = DynCastFrom(child_stmt))
+    if (CallExpr const* call = DynCastFrom(child_expr->IgnoreParenImpCasts()))
+    if (FunctionDecl const* decl = DynCastFrom(call->getCalleeDecl()))
+    {
+        return decl->getReturnType().getTypePtr();
+    }
+
+    if (const auto* cast_expr = dyn_cast<ImplicitCastExpr>(child_stmt)) {
       return cast_expr->getType().getTypePtr();
     }
   }
