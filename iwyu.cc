@@ -908,13 +908,18 @@ class BaseAstVisitor : public RecursiveASTVisitor<Derived> {
     if (CanIgnoreCurrentASTNode())  return true;
 
     if (FunctionDecl* fn_decl = DynCastFrom(expr->getDecl())) {
-      // If fn_decl has a class-name before it -- 'MyClass::method' --
-      // it's a method pointer.
-      const Type* parent_type = nullptr;
-      if (expr->getQualifier() && expr->getQualifier()->getAsType())
-        parent_type = expr->getQualifier()->getAsType();
-      if (!this->getDerived().HandleFunctionCall(fn_decl, parent_type, expr))
-        return false;
+      //Each function call contains a reference to its callee. If this is
+      //such case, skip it or we will end up visiting the function twice.
+      auto call = current_ast_node()-> template GetAncestorAs<CallExpr>(2);
+      if (call == nullptr || call->getCallee()->IgnoreImpCasts() != expr) {
+        // If fn_decl has a class-name before it -- 'MyClass::method' --
+        // it's a method pointer.
+        const Type* parent_type = nullptr;
+        if (expr->getQualifier() && expr->getQualifier()->getAsType())
+          parent_type = expr->getQualifier()->getAsType();
+        if (!this->getDerived().HandleFunctionCall(fn_decl, parent_type, expr))
+          return false;
+      }
     }
     return true;
   }
@@ -3783,13 +3788,17 @@ class IwyuAstConsumer
   // Called whenever a variable, function, enum, etc is used.
   bool VisitDeclRefExpr(clang::DeclRefExpr* expr) {
     if (CanIgnoreCurrentASTNode())  return true;
+
     // Special case for UsingShadowDecl to track UsingDecls correctly. The
     // actual decl will be reported by obtaining it from the UsingShadowDecl
     // once we've tracked the UsingDecl use.
     if (const UsingShadowDecl* found_decl = DynCastFrom(expr->getFoundDecl())) {
       ReportDeclUse(CurrentLoc(), found_decl);
     } else {
-      ReportDeclUse(CurrentLoc(), expr->getDecl());
+
+      //Report non-function decls (functions are analyzed in HandleFunctionCall)
+      if (!isa<FunctionDecl>(expr->getDecl()))
+        ReportDeclUse(CurrentLoc(), expr->getDecl());
     }
     return Base::VisitDeclRefExpr(expr);
   }
