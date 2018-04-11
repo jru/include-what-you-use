@@ -791,7 +791,7 @@ class BaseAstVisitor : public RecursiveASTVisitor<Derived> {
     if (!Base::TraverseCallExpr(expr))  return false;
     if (CanIgnoreCurrentASTNode())  return true;
     return this->getDerived().HandleFunctionCall(expr->getDirectCallee(),
-                                                 TypeOfParentIfMethod(expr),
+                                                 GetParentType(expr),
                                                  expr);
   }
 
@@ -799,7 +799,7 @@ class BaseAstVisitor : public RecursiveASTVisitor<Derived> {
     if (!Base::TraverseCXXMemberCallExpr(expr))  return false;
     if (CanIgnoreCurrentASTNode())  return true;
     return this->getDerived().HandleFunctionCall(expr->getDirectCallee(),
-                                                 TypeOfParentIfMethod(expr),
+                                                 GetParentType(expr),
                                                  expr);
   }
 
@@ -807,15 +807,12 @@ class BaseAstVisitor : public RecursiveASTVisitor<Derived> {
     if (!Base::TraverseCXXOperatorCallExpr(expr))  return false;
     if (CanIgnoreCurrentASTNode())  return true;
 
-    const Type* parent_type = TypeOfParentIfMethod(expr);
     // If we're a free function -- bool operator==(MyClass a, MyClass b) --
     // we still want to have a parent_type, as if we were defined as
     // MyClass::operator==.  So we go through the arguments and take the
     // first one that's a class, and associate the function with that.
-    if (!parent_type) {
-      if (const Expr* first_argument = GetFirstClassArgument(expr))
-        parent_type = GetTypeOf(first_argument);
-    }
+    const Type* parent_type = GetFirstClassArgumentType(expr);
+
     return this->getDerived().HandleFunctionCall(expr->getDirectCallee(),
                                                  parent_type, expr);
   }

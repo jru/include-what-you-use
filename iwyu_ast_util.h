@@ -33,6 +33,7 @@ class CXXConstructorDecl;
 class CXXDeleteExpr;
 class CXXDestructorDecl;
 class CXXMethodDecl;
+class CXXOperatorCallExpr;
 class CXXRecordDecl;
 class CallExpr;
 class CastExpr;
@@ -768,9 +769,9 @@ bool IsAddressOf(const clang::Expr* expr);
 // one or a static one -- returns the type of the class.  Otherwise,
 // returns nullptr.  Note that static class methods do *not* have a
 // CXXMemberCallExpr type, which is why we take a CallExpr.
-const clang::Type* TypeOfParentIfMethod(const clang::CallExpr* expr);
+const clang::Type* GetParentType(const clang::CallExpr* expr);
 
-// Given a function call, return the first argument that's a class
+// Given an operator call, return the first argument that's a class
 // (possibly a template specialization).  Note we ignore pointers to a
 // class.  This is used with 'free' overloaded operators ('ostream&
 // operator<<(ostream& a, int x)' to figure out what class the
@@ -778,7 +779,8 @@ const clang::Type* TypeOfParentIfMethod(const clang::CallExpr* expr);
 // may "belong" to more than one argument, for instance), but covers
 // all the common cases.  Returns nullptr if no class-type argument is
 // found.
-const clang::Expr* GetFirstClassArgument(clang::CallExpr* expr);
+const clang::Expr* GetFirstClassArgument(const clang::CXXOperatorCallExpr* expr);
+const clang::Type* GetFirstClassArgumentType(const clang::CXXOperatorCallExpr* expr);
 
 // Returns nullptr if we're deleting an argument that has no destructor.
 const clang::CXXDestructorDecl* GetDestructorForDeleteExpr(

@@ -54,7 +54,9 @@ using clang::CXXDependentScopeMemberExpr;
 using clang::CXXDestructorDecl;
 using clang::CXXMethodDecl;
 using clang::CXXNewExpr;
+using clang::CXXOperatorCallExpr;
 using clang::CXXRecordDecl;
+using clang::CXXTemporaryObjectExpr;
 using clang::CallExpr;
 using clang::CastExpr;
 using clang::ClassTemplateDecl;
@@ -79,7 +81,7 @@ using clang::FunctionDecl;
 using clang::FunctionType;
 using clang::ImplicitCastExpr;
 using clang::InjectedClassNameType;
-using clang::LValueReferenceType;
+using clang::ReferenceType;
 using clang::MemberExpr;
 using clang::MemberPointerType;
 using clang::NamedDecl;
@@ -1070,15 +1072,35 @@ bool DeclsAreInSameClass(const Decl* decl1, const Decl* decl2) {
 
 // --- Utilities for Type.
 
+const Type* GetTypeOfExpr(const Expr* expr) {
+   return expr->getType().getTypePtr();
+}
+
 const Type* GetTypeOf(const Expr* expr) {
-  return expr->getType().getTypePtr();
+
+  if (const CXXConstructExpr* cons = DynCastFrom(expr)) {
+    return GetTypeOf(cons);
+  }
+  return GetTypeOfExpr(expr);
 }
 
 const Type* GetTypeOf(const CXXConstructExpr* expr) {
-  const Type* type = expr->getType().getTypePtr();
+
+  const Type* type = GetTypeOfExpr(expr);
   if (const clang::ArrayType* array_type = type->getAsArrayTypeUnsafe()) {
-    type = array_type->getElementType().getTypePtr();
+    return array_type->getElementType().getTypePtr();
   }
+
+  //If this constructor is a temporary or referenced in an expression, it will
+  //have one of these expressions as its only argument. If that's the case use
+  //that type to keep the sugar used by the user. For example, if passed by
+  //value to a function using an aliased name.
+  if (expr->getNumArgs() == 1) {
+    const Expr* ref = expr->getArg(0)->IgnoreParenImpCasts();
+    if (isa<DeclRefExpr>(ref) || isa<CXXTemporaryObjectExpr>(ref))
+      return GetTypeOfExpr(ref);
+  }
+
   return type;
 }
 
@@ -1120,13 +1142,12 @@ const Type* RemoveSubstTemplateTypeParm(const Type* type) {
 
 bool IsPointerOrReferenceAsWritten(const Type* type) {
   type = RemoveElaboration(type);
-  return isa<PointerType>(type) || isa<LValueReferenceType>(type);
+  return isa<PointerType>(type) || isa<ReferenceType>(type);
 }
 
 const Type* RemovePointersAndReferencesAsWritten(const Type* type) {
   type = RemoveElaboration(type);
-  while (isa<PointerType>(type) ||
-         isa<LValueReferenceType>(type)) {
+  while (isa<PointerType>(type) || isa<ReferenceType>(type)) {
     type = type->getPointeeType().getTypePtr();
   }
   return type;
@@ -1194,7 +1215,7 @@ const NamedDecl* TypeToDeclAsWritten(const Type* type) {
 }
 
 const Type* RemoveReferenceAsWritten(const Type* type) {
-  if (const LValueReferenceType* ref_type = DynCastFrom(type))
+  if (const ReferenceType* ref_type = DynCastFrom(type))
     return ref_type->getPointeeType().getTypePtr();
   else
     return type;
@@ -1204,7 +1225,7 @@ bool HasImplicitConversionConstructor(const Type* type) {
   type = RemoveElaboration(type);  // get rid of the class keyword
   if (isa<PointerType>(type))
     return false;  // can't implicitly convert to a pointer
-  if (isa<LValueReferenceType>(type) &&
+  if (isa<ReferenceType>(type) &&
       !type->getPointeeType().isConstQualified())
     return false;  // can't implicitly convert to a non-const reference
 
@@ -1291,12 +1312,13 @@ bool IsAddressOf(const Expr* expr) {
   return false;
 }
 
-const Type* TypeOfParentIfMethod(const CallExpr* expr) {
+const Type* GetParentType(const CallExpr* expr) {
   // callee_expr is a MemberExpr if we're a normal class method, or
   // DeclRefExpr if we're a static class method or an overloaded operator.
-  const Expr* callee_expr = expr->getCallee()->IgnoreParenCasts();
+  const Expr* callee_expr = expr->getCallee()->IgnoreParenImpCasts();
   if (const MemberExpr* member_expr = DynCastFrom(callee_expr)) {
-    const Type* class_type = GetTypeOf(member_expr->getBase());
+    const Type* class_type =
+        GetTypeOf(member_expr->getBase()->IgnoreParenImpCasts());
     // For class->member(), class_type is a pointer.
     return RemovePointersAndReferencesAsWritten(class_type);
   } else if (const DeclRefExpr* ref_expr = DynCastFrom(callee_expr)) {
@@ -1307,39 +1329,59 @@ const Type* TypeOfParentIfMethod(const CallExpr* expr) {
   return nullptr;
 }
 
-const Expr* GetFirstClassArgument(CallExpr* expr) {
-  if (const FunctionDecl* callee_decl = expr->getDirectCallee()) {
-    if (isa<CXXMethodDecl>(callee_decl)) {
-      // If a method is called, return 'this'.
+const Expr* GetFirstClassArgument(const CXXOperatorCallExpr* expr) {
+
+  const FunctionDecl* callee_decl = expr->getDirectCallee();
+  if (callee_decl == nullptr)
+    return nullptr;
+
+  if (const CXXMethodDecl* method = DynCastFrom(callee_decl)) {
+    // If an instance overloaded operator is called (e.g. operator+=), return 'this'.
+    if (method->isInstance())
       return expr->getArg(0);
-    }
-    // Handle free functions.
-    CHECK_(callee_decl->getNumParams() == expr->getNumArgs() &&
-        "Require one-to-one match between call arguments and decl parameters");
-    int params_count = callee_decl->getNumParams();
-    for (int i = 0; i < params_count; i++) {
-      // View argument types from the perspective of function declaration,
-      // not from the caller's perspective.  For example, function parameter
-      // can have template type but function argument is not necessarily
-      // a template when the function is called.
-      const Type* param_type = GetTypeOf(callee_decl->getParamDecl(i));
-      param_type = RemovePointersAndReferencesAsWritten(param_type);
-      // Make sure we do the right thing given a function like
-      //    template <typename T> void operator>>(const T& x, ostream& os);
-      // In this case ('myclass >> os'), we want to be returning the
-      // type of os, not of myclass, and we do, because myclass will be
-      // a SubstTemplateTypeParmType, not a RecordType.
-      if (isa<SubstTemplateTypeParmType>(param_type))
-        continue;
-      // See through typedefs.
-      param_type = param_type->getUnqualifiedDesugaredType();
-      if (isa<RecordType>(param_type) ||
-          isa<TemplateSpecializationType>(param_type)) {
-        return expr->getArg(i);
+  }
+
+  CHECK_(callee_decl->getNumParams() == expr->getNumArgs())
+      << " Require one-to-one match between call arguments and decl parameters";
+
+  const Expr* arg = nullptr;
+  int const params_count = callee_decl->getNumParams();
+  for (int i = 0; i < params_count; i++) {
+    // View argument types from the perspective of function declaration,
+    // not from the caller's perspective.  For example, function parameter
+    // can have template type but function argument is not necessarily
+    // a template when the function is called.
+    const Type* param_type = RemovePointersAndReferencesAsWritten(
+        GetTypeOf(callee_decl->getParamDecl(i)));
+
+    // Make sure we do the right thing given a function like
+    // template <typename T> void operator>>(const T& x, ostream& os) ;
+    // In this case ('myclass >> os'), we want to be returning the
+    // type of os, not of myclass, and we do, because myclass will be
+    // a SubstTemplateTypeParmType, not a RecordType.
+    if (const SubstTemplateTypeParmType* tmpl = DynCastFrom(param_type)) {
+      if (arg == nullptr) {
+        auto t = tmpl->getReplacementType().getTypePtr();
+        CHECK_(t) << " Expecting a non-dependent type";
+        if (isa<RecordType>(t))
+          arg = expr->getArg(i);
       }
+      continue;
+    }
+
+    param_type = param_type->getUnqualifiedDesugaredType();
+    if (isa<RecordType>(param_type) ||
+        isa<TemplateSpecializationType>(param_type)) {
+      arg = expr->getArg(i);
+      break;
     }
   }
-  return nullptr;
+  return arg != nullptr ? arg->IgnoreParenImpCasts() : nullptr;
+}
+
+const clang::Type* GetFirstClassArgumentType(const CXXOperatorCallExpr* expr) {
+  const Expr* arg = GetFirstClassArgument(expr);
+  return arg != nullptr ? GetTypeOf(arg) : nullptr;
 }
 
 const CXXDestructorDecl* GetDestructorForDeleteExpr(const CXXDeleteExpr* expr) {
