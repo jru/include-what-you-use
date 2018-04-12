@@ -18,28 +18,42 @@ class Container {
   // C++11 alias declaration, should not be an iwyu violation for T
   using alias_type = T;
 
-  // IWYU: Pair is...*typedef_in_template-i1.h
+  // IWYU: Pair is...*typedef_in_template-i2.h
   typedef Pair<T,T> pair_type;
 };
 
 
 void Declarations() {
-  // These do not need the full type for Class because they're template params.
+  // TODO: Close bug #431
 
-  // TODO: This is almost certainly wrong, see bug #431
-  // We should not require the full definition of Class for passing it as a
-  // template argument, but we must require it when the typedef it's aliasing
-  // is full-used.
-  // The bug has instructions for how to provoke the error more obviously.
+  // None of these need the full type for Class in the template parameter,
+  // but they still require the full type for the constructed value.
 
   // IWYU: Class needs a declaration
-  Container<Class>::value_type vt;
+  Container<Class>::value_type
+  // IWYU: Class is defined in .+template-i1.h
+  vt;
+  // IWYU: Class needs a declaration
+  Container<Class>::pair_type
+  // IWYU: Pair is defined in .+template-i2.h
+  pt;
+  // IWYU: Class needs a declaration
+  Container<Class>::alias_type
+  // IWYU: Class is defined in .+template-i1.h
+  at;
+
+  // None of these need the full type for Class in the template parameter,
+  // nor a declaration for the values because they are just pointers.
 
   // IWYU: Class needs a declaration
-  Container<Class>::pair_type pt;
-
+  Container<Class>::value_type* 
+  pvt;
   // IWYU: Class needs a declaration
-  Container<Class>::alias_type at;
+  Container<Class>::pair_type* 
+  ppt;
+  // IWYU: Class needs a declaration
+  Container<Class>::alias_type*
+  pat;
 }
 
 
@@ -47,11 +61,13 @@ void Declarations() {
 
 tests/cxx/typedef_in_template.cc should add these lines:
 #include "tests/cxx/typedef_in_template-i1.h"
+#include "tests/cxx/typedef_in_template-i2.h"
 
 tests/cxx/typedef_in_template.cc should remove these lines:
 - #include "tests/cxx/typedef_in_template-d1.h"  // lines XX-XX
 
 The full include-list for tests/cxx/typedef_in_template.cc:
-#include "tests/cxx/typedef_in_template-i1.h"  // for Class (ptr only), Pair
+#include "tests/cxx/typedef_in_template-i1.h"  // for Class
+#include "tests/cxx/typedef_in_template-i2.h"  // for Pair
 
 ***** IWYU_SUMMARY */

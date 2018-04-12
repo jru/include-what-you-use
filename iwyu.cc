@@ -2509,7 +2509,47 @@ class IwyuBaseAstVisitor : public BaseAstVisitor<Derived> {
     if (IsProcessedOverloadLoc(CurrentLoc()))
       return true;
 
-    ReportDeclUse(CurrentLoc(), callee);
+    /// TODO: 
+    //    - Consider including the parent in the OneUse to be able
+    //      to postpone this analysis to the post-processing phase
+    //    - we might need to be able to resugar arguments with nested
+    //      types (for example, we could make '*it' resugar now to
+    //      Vector_iterator<int>::reference in templated code but it
+    //      should probably be std::vector<int>::iterator::reference
+    //      instead) To do that we will need to identify resugared
+    //      parts in GetTplTypeResugarMapForClassNoComponentTypes
+    //      coming from other arguments (only relevant in templates
+    //      which necessarily work on the canonical types)
+    //
+    //
+    // Rules to decide who is responsible for the callee decl:
+    // 
+    //1. Is the decl visible from the parent type location?
+    //   Yes -> Location of the current parent type is responsible
+    //   No  -> Remove one level of sugar
+    //2. Did the type change?
+    //   Yes -> Go to 1
+    //   No  -> Location of the callee is responsible
+    const NamedDecl* reponsible_decl = callee;
+    if (parent_type != nullptr) {
+      const Type* last_desugared = parent_type;
+      const Type* current_type = nullptr;
+      do {
+        current_type = last_desugared;
+        if (auto parent_decl = TypeToDeclAsWritten(current_type))
+          if (preprocessor_info().PublicHeaderIntendsToProvide(
+                  GetFileEntry(parent_decl), GetFileEntry(callee))) {
+            reponsible_decl = parent_decl;
+            break;
+          }
+
+        last_desugared = RemovePointersAndReferencesAsWritten(current_type)
+                             ->getLocallyUnqualifiedSingleStepDesugaredType()
+                             .getTypePtr();
+      } while (current_type != last_desugared);
+    }
+
+    ReportDeclUse(CurrentLoc(), reponsible_decl);
 
     // Usually the function-author is responsible for providing the
     // full type information for the return type of the function, but
