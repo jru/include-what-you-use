@@ -693,9 +693,8 @@ set<FunctionDecl*> GetLateParsedFunctionDecls(TranslationUnitDecl* decl) {
 // This is because when a type is 'owned' by the template
 // instantiator, all parts of the type are owned.  We only consider
 // type-components as written.
-static map<const Type*, const Type*> ResugarTypeComponents(
-    const map<const Type*, const Type*>& resugar_map) {
-  map<const Type*, const Type*> retval = resugar_map;
+static TypeMap ResugarTypeComponents(const TypeMap& resugar_map) {
+  TypeMap retval = resugar_map;
   for (const auto& types : resugar_map) {
     const set<const Type*>& components = GetComponentsOfType(types.second);
     for (const Type* component_type : components) {
@@ -711,9 +710,9 @@ static map<const Type*, const Type*> ResugarTypeComponents(
 }
 
 // Helpers for GetTplTypeResugarMapForFunction().
-static map<const Type*, const Type*> GetTplTypeResugarMapForFunctionNoCallExpr(
+static TypeMap GetTplTypeResugarMapForFunctionNoCallExpr(
     const FunctionDecl* decl, unsigned start_arg) {
-  map<const Type*, const Type*> retval;
+  TypeMap retval;
   if (!decl)   // can be nullptr if the function call is via a function pointer
     return retval;
   if (const TemplateArgumentList* tpl_list
@@ -729,11 +728,11 @@ static map<const Type*, const Type*> GetTplTypeResugarMapForFunctionNoCallExpr(
   return retval;
 }
 
-static map<const Type*, const Type*>
+static TypeMap
 GetTplTypeResugarMapForFunctionExplicitTplArgs(
     const FunctionDecl* decl,
     const TemplateArgumentListInfo& explicit_tpl_list) {
-  map<const Type*, const Type*> retval;
+  TypeMap retval;
   for (const TemplateArgumentLoc& loc : explicit_tpl_list.arguments()) {
     if (const Type* arg_type = GetTemplateArgAsType(loc.getArgument())) {
       retval[GetCanonicalType(arg_type)] = arg_type;
@@ -761,9 +760,9 @@ static const Type* GetSugaredTypeOf(const Expr* expr) {
   return GetTypeOf(expr);
 }
 
-map<const Type*, const Type*> GetTplTypeResugarMapForFunction(
-    const FunctionDecl* decl, const Expr* calling_expr) {
-  map<const Type*, const Type*> retval;
+TypeMap GetTplTypeResugarMapForFunction(const FunctionDecl* decl,
+                                        const Expr* calling_expr) {
+  TypeMap retval;
 
   // If calling_expr is nullptr, then we can't find any explicit template
   // arguments, if they were specified (e.g. 'Fn<int>()'), and we
@@ -821,7 +820,7 @@ map<const Type*, const Type*> GetTplTypeResugarMapForFunction(
   //     operator<<(basic_ostream<char, T>& o, int i);
   // If I pass in an ostream as the first argument, then no part
   // of the (sugared) argument types match T, so we ignore it.
-  const map<const Type*, const Type*>& desugared_types
+  const TypeMap& desugared_types
       = GetTplTypeResugarMapForFunctionNoCallExpr(decl, start_of_implicit_args);
 
   // TODO(csilvers): SubstTemplateTypeParms are always desugared,
@@ -1220,9 +1219,8 @@ bool HasImplicitConversionConstructor(const Type* type) {
   return HasImplicitConversionCtor(cxx_class);
 }
 
-map<const clang::Type*, const clang::Type*>
-GetTplTypeResugarMapForClassNoComponentTypes(const clang::Type* type) {
-  map<const Type*, const Type*> retval;
+TypeMap GetTplTypeResugarMapForClassNoComponentTypes(const clang::Type* type) {
+  TypeMap retval;
   type = RemoveElaboration(type);  // get rid of the class keyword
   const TemplateSpecializationType* tpl_spec_type = DynCastFrom(type);
   if (!tpl_spec_type)
@@ -1277,8 +1275,7 @@ GetTplTypeResugarMapForClassNoComponentTypes(const clang::Type* type) {
   return retval;
 }
 
-map<const clang::Type*, const clang::Type*> GetTplTypeResugarMapForClass(
-    const clang::Type* type) {
+TypeMap GetTplTypeResugarMapForClass(const clang::Type* type) {
   return ResugarTypeComponents(  // add in the decomposition of retval
       GetTplTypeResugarMapForClassNoComponentTypes(type));
 }

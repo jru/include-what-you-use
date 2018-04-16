@@ -220,7 +220,6 @@ using llvm::dyn_cast_or_null;
 using llvm::errs;
 using llvm::isa;
 using std::make_pair;
-using std::map;
 using std::set;
 using std::string;
 using std::swap;
@@ -2823,10 +2822,10 @@ class InstantiatedTemplateVisitor
   // about ourselves.  If it's in the resugar_map but with a nullptr
   // value, it's a default template parameter, that the
   // template-caller may or may not be responsible for.
-  void ScanInstantiatedFunction(
-      const FunctionDecl* fn_decl, const Type* parent_type,
-      const ASTNode* caller_ast_node,
-      const map<const Type*, const Type*>& resugar_map) {
+  void ScanInstantiatedFunction(const FunctionDecl* fn_decl,
+                                const Type* parent_type,
+                                const ASTNode* caller_ast_node,
+                                const TypeMap& resugar_map) {
     Clear();
     caller_ast_node_ = caller_ast_node;
     resugar_map_ = resugar_map;
@@ -2845,7 +2844,7 @@ class InstantiatedTemplateVisitor
   // a template class to get at a field of it, for instance:
   // MyClass<T>::size_type s;
   void ScanInstantiatedType(ASTNode* caller_ast_node,
-                            const map<const Type*, const Type*>& resugar_map) {
+                            const TypeMap& resugar_map) {
     Clear();
     caller_ast_node_ = caller_ast_node;
     resugar_map_ = resugar_map;
@@ -3383,7 +3382,7 @@ class InstantiatedTemplateVisitor
 
     // This says how the template-args are used by this hard-coded type
     // (a set<>, or map<>, or ...), to avoid having to recurse into them.
-    const map<const Type*, const Type*>& resugar_map_for_precomputed_type =
+    const TypeMap& resugar_map_for_precomputed_type =
         FullUseCache::GetPrecomputedResugarMap(tpl_type);
     // But we need to reconcile that with the types-of-interest, as
     // stored in resugar_map_.  To do this, we take only those entries
@@ -3391,7 +3390,7 @@ class InstantiatedTemplateVisitor
     // resugar_map_.  We consider type components, so if
     // resugar_map_for_precomputed_type has less_than<Foo> or hash<Foo>,
     // we'll add those in even if resugar_map_ only includes 'Foo'.
-    map<const Type*, const Type*> resugar_map;
+    TypeMap resugar_map;
     for (const auto& item : resugar_map_for_precomputed_type) {
       // TODO(csilvers): for default template args, item.first is sometimes
       // a RecordType even when it's a template specialization.  Figure out
@@ -3452,7 +3451,7 @@ class InstantiatedTemplateVisitor
   // about ourselves.  If it's in the resugar_map but with a nullptr
   // value, it's a default template parameter, that the
   // template-caller may or may not be responsible for.
-  map<const Type*, const Type*> resugar_map_;
+  TypeMap resugar_map_;
 
   // Used to avoid recursion in the *Helper() methods.
   set<const Decl*> traversed_decls_;
@@ -3881,8 +3880,7 @@ class IwyuAstConsumer
     // If we're not in a forward-declare context, use of a template
     // specialization requires having the full type information.
     if (!CanForwardDeclareType(current_ast_node())) {
-      const map<const Type*, const Type*> resugar_map
-          = GetTplTypeResugarMapForClass(type);
+      const TypeMap resugar_map = GetTplTypeResugarMapForClass(type);
 
       instantiated_template_visitor_.ScanInstantiatedType(current_ast_node(),
                                                           resugar_map);
@@ -3927,11 +3925,10 @@ class IwyuAstConsumer
     if (!callee || CanIgnoreCurrentASTNode() || CanIgnoreDecl(callee))
       return true;
 
-    if (!IsTemplatizedFunctionDecl(callee) && !IsTemplatizedType(parent_type))
+    if (!callee->isTemplateInstantiation() && !IsTemplatizedType(parent_type))
       return true;
 
-    map<const Type*, const Type*> resugar_map
-        = GetTplTypeResugarMapForFunction(callee, calling_expr);
+    TypeMap resugar_map = GetTplTypeResugarMapForFunction(callee, calling_expr);
 
     if (parent_type) {    // means we're a method of a class
       InsertAllInto(GetTplTypeResugarMapForClass(parent_type), &resugar_map);

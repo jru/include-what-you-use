@@ -52,7 +52,6 @@ struct ASTTemplateArgumentListInfo;
 
 namespace include_what_you_use {
 
-using std::map;
 using std::set;
 using std::string;
 
@@ -515,6 +514,8 @@ clang::SourceRange GetSourceRangeOfClassDecl(const clang::Decl* decl);
 set<clang::FunctionDecl*> GetLateParsedFunctionDecls(
     clang::TranslationUnitDecl* decl);
 
+using TypeMap = std::map<const clang::Type*, const clang::Type*>;
+
 // One can't have partial template specialization or default template
 // args for function templates, but they're complicated in their own
 // way: they can have deduced template arguments (deduced from the
@@ -548,7 +549,7 @@ set<clang::FunctionDecl*> GetLateParsedFunctionDecls(
 // we'd need to refactor SemaTemplateDeduction to take an argument to
 // not canonicalize deduced template arguments.
 // calling_expr should be a CallExpr, CXXConstructExpr, or DeclRefExpr.
-map<const clang::Type*, const clang::Type*> GetTplTypeResugarMapForFunction(
+TypeMap GetTplTypeResugarMapForFunction(
     const clang::FunctionDecl* decl, const clang::Expr* calling_expr);
 
 // If class_decl is instantiated from a class template,
@@ -749,15 +750,13 @@ bool HasImplicitConversionConstructor(const clang::Type* type);
 // 'TypedefType' -> 'Foo'.
 // For ease of calling, this accept any type, but will return an empty
 // map for any input that's not a template specialization type.
-map<const clang::Type*, const clang::Type*> GetTplTypeResugarMapForClass(
-    const clang::Type* type);
+TypeMap GetTplTypeResugarMapForClass(const clang::Type* type);
 
 // Like GetTplTypeResugarMapForClass, but if a type has
 // components (for instance, 'Foo*' and 'vector<Foo>' both
 // have a component Foo), we don't include the components
 // in the result-map.
-map<const clang::Type*, const clang::Type*>
-GetTplTypeResugarMapForClassNoComponentTypes(const clang::Type* type);
+TypeMap GetTplTypeResugarMapForClassNoComponentTypes(const clang::Type* type);
 
 // --- Utilities for Stmt.
 
