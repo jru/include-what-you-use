@@ -56,6 +56,8 @@ using std::set;
 
 class FullUseCache {
  public:
+  using DeclItem = std::pair<const clang::NamedDecl*, const clang::Type*>;
+
   // The first part of the key is the decl or type that we're
   // caching reporting-info for.  Since what we report depends on
   // what the types-of-interest were, we store that in the key too.
@@ -63,12 +65,12 @@ class FullUseCache {
                map<const clang::Type*, const clang::Type*>> Key;
   // The value are the types and decls we reported.
   typedef pair<const set<const clang::Type*>,
-               const set<const clang::NamedDecl*>> Value;
+               const set<DeclItem>> Value;
 
   void Insert(const void* decl_or_type,
               const map<const clang::Type*, const clang::Type*>& resugar_map,
               const set<const clang::Type*>& reported_types,
-              const set<const clang::NamedDecl*>& reported_decls) {
+              const set<DeclItem>& reported_decls) {
     // TODO(csilvers): should in_forward_declare_context() be in Key too?
     cache_.insert(pair<Key,Value>(Key(decl_or_type, resugar_map),
                                   Value(reported_types, reported_decls)));
@@ -92,7 +94,7 @@ class FullUseCache {
     return value->first;
   }
 
-  const set<const clang::NamedDecl*>& GetFullUseDecls(
+  const set<DeclItem>& GetFullUseDecls(
       const void* key,
       const map<const clang::Type*, const clang::Type*>& resugar_map) const {
     const Value* value = FindInMap(&cache_, Key(key, resugar_map));
@@ -153,8 +155,8 @@ class CacheStoringScope {
   void NoteReportedType(const clang::Type* type) {
     reported_types_.insert(type);
   }
-  void NoteReportedDecl(const clang::NamedDecl* decl) {
-    reported_decls_.insert(decl);
+  void NoteReportedDecl(const clang::NamedDecl* decl, const clang::Type* parent_type) {
+    reported_decls_.emplace(decl, parent_type);
   }
 
  private:
@@ -163,7 +165,7 @@ class CacheStoringScope {
   const void* const key_;
   const map<const clang::Type*, const clang::Type*>& resugar_map_;
   set<const clang::Type*> reported_types_;
-  set<const clang::NamedDecl*> reported_decls_;
+  set<FullUseCache::DeclItem> reported_decls_;
 };
 
 }  // namespace include_what_you_use

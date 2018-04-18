@@ -49,6 +49,7 @@ class OneUse {
   enum UseKind { kFullUse, kForwardDeclareUse };
 
   OneUse(const clang::NamedDecl* decl,
+         const clang::TypeDecl* parent_decl,
          clang::SourceLocation use_loc,
          UseKind use_kind,
          UseFlags flags,
@@ -66,6 +67,7 @@ class OneUse {
   const string& symbol_name() const { return symbol_name_; }
   const string& short_symbol_name() const { return short_symbol_name_; }
   const clang::NamedDecl* decl() const  { return decl_; }
+  const clang::TypeDecl* parent_decl() const  { return parent_decl_; }
   const clang::FileEntry* decl_file() const { return decl_file_; }
   const string& decl_filepath() const { return decl_filepath_; }
   clang::SourceLocation use_loc() const { return use_loc_; }
@@ -105,6 +107,7 @@ class OneUse {
   const clang::NamedDecl* decl_;   // decl of the symbol, if we know it
   clang::SourceLocation decl_loc_;     // where the decl is attributed to live
   const clang::FileEntry* decl_file_;  // file entry where the symbol lives
+  const clang::TypeDecl* parent_decl_;   // decl of the type that acts as parent, if any.
   string decl_filepath_;           // filepath where the symbol lives
   clang::SourceLocation use_loc_;  // where the symbol is used from
   UseKind use_kind_;               // kFullUse or kForwardDeclareUse
@@ -232,6 +235,7 @@ class IwyuFileInfo {
 
   void ReportFullSymbolUse(clang::SourceLocation use_loc,
                            const clang::NamedDecl* decl,
+                           const clang::Type* parent_type,
                            UseFlags flags, const char* comment);
   // This is used for symbols with a made up dfn_filepath.  Currently it's used
   // only for placement operator new in templates (see

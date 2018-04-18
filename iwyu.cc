@@ -1633,6 +1633,7 @@ class IwyuBaseAstVisitor : public BaseAstVisitor<Derived> {
   // with the warning message that iwyu emits.
   virtual void ReportDeclUseWithComment(SourceLocation used_loc,
                                         const NamedDecl* used_decl,
+                                        const Type* parent_type,
                                         const char* comment) {
     const NamedDecl* target_decl = used_decl;
 
@@ -1649,7 +1650,7 @@ class IwyuBaseAstVisitor : public BaseAstVisitor<Derived> {
     used_loc = GetCanonicalUseLocation(used_loc, target_decl);
     const FileEntry* used_in = GetFileEntry(used_loc);
     preprocessor_info().FileInfoFor(used_in)->ReportFullSymbolUse(
-        used_loc, target_decl, ComputeUseFlags(current_ast_node()),
+        used_loc, target_decl, parent_type, ComputeUseFlags(current_ast_node()),
         comment);
 
     // Sometimes using a decl drags in a few other uses as well:
@@ -1735,8 +1736,9 @@ class IwyuBaseAstVisitor : public BaseAstVisitor<Derived> {
   }
 
   // Like ReportDeclUse, but for the common case of no comment.
-  void ReportDeclUse(SourceLocation used_loc, const NamedDecl* decl) {
-    return ReportDeclUseWithComment(used_loc, decl, nullptr);
+  void ReportDeclUse(SourceLocation used_loc, const NamedDecl* decl,
+                     const Type* parent_type) {
+    return ReportDeclUseWithComment(used_loc, decl, parent_type, nullptr);
   }
 
   void ReportDeclForwardDeclareUse(SourceLocation used_loc,
@@ -1745,9 +1747,9 @@ class IwyuBaseAstVisitor : public BaseAstVisitor<Derived> {
   }
 
   void ReportDeclsUse(SourceLocation used_loc,
-                      const set<const NamedDecl*>& decls) {
-    for (const NamedDecl* decl : decls)
-      ReportDeclUse(used_loc, decl);
+                      const set<FullUseCache::DeclItem>& decls) {
+    for (auto pair : decls)
+      ReportDeclUse(used_loc, pair.first, pair.second);
   }
 
   // Called when the given type is fully used at used_loc, regardless
@@ -1777,7 +1779,7 @@ class IwyuBaseAstVisitor : public BaseAstVisitor<Derived> {
         decl = GetDefinitionAsWritten(decl);
         VERRS(6) << "(For type " << PrintableType(type) << "):\n";
         IwyuBaseAstVisitor<Derived>::ReportDeclUseWithComment(
-            used_loc, decl, comment);
+            used_loc, decl, nullptr, comment);
       }
     }
   }
@@ -1872,7 +1874,7 @@ class IwyuBaseAstVisitor : public BaseAstVisitor<Derived> {
       if (decl->getKind() == Decl::Function) {
         FunctionDecl* redecl = decl;
         while ((redecl = redecl->getPreviousDecl()))
-          ReportDeclUse(CurrentLoc(), redecl);
+          ReportDeclUse(CurrentLoc(), redecl, nullptr);
       }
     } else {
       // Make all our types forward-declarable...
@@ -2434,7 +2436,7 @@ class IwyuBaseAstVisitor : public BaseAstVisitor<Derived> {
       // actually report the function use if CanIgnoreCurrentASTNode()
       // is *currently* false.
       if (!CanIgnoreCurrentASTNode())
-        ReportDeclUse(CurrentLoc(), arbitrary_fn_decl);
+        ReportDeclUse(CurrentLoc(), arbitrary_fn_decl, nullptr);
     }
     return true;
   }
@@ -2509,7 +2511,7 @@ class IwyuBaseAstVisitor : public BaseAstVisitor<Derived> {
     if (IsProcessedOverloadLoc(CurrentLoc()))
       return true;
 
-    ReportDeclUse(CurrentLoc(), callee);
+    ReportDeclUse(CurrentLoc(), callee, parent_type);
 
     // Usually the function-author is responsible for providing the
     // full type information for the return type of the function, but
@@ -2566,7 +2568,7 @@ class IwyuBaseAstVisitor : public BaseAstVisitor<Derived> {
       ReportDeclForwardDeclareUse(CurrentLoc(), decl);
       current_ast_node()->set_in_forward_declare_context(true);
     } else {
-      ReportDeclUse(CurrentLoc(), decl);
+      ReportDeclUse(CurrentLoc(), decl, nullptr);
     }
 
     return true;
@@ -2937,19 +2939,20 @@ class InstantiatedTemplateVisitor
   // (if templates call other templates, we have to find the right
   // template).
   void ReportDeclUseWithComment(SourceLocation used_loc, const NamedDecl* decl,
+                                const Type* parent_type,
                                 const char* comment) override {
     const SourceLocation actual_used_loc = GetLocOfTemplateThatProvides(decl);
     if (actual_used_loc.isValid()) {
       // If a template is responsible for this decl, then we don't add
       // it to the cache; the cache is only for decls that the
       // original caller is responsible for.
-      Base::ReportDeclUseWithComment(actual_used_loc, decl, comment);
+      Base::ReportDeclUseWithComment(actual_used_loc, decl, parent_type, comment);
     } else {
       // Let all the currently active types and decls know about this
       // report, so they can update their cache entries.
       for (CacheStoringScope* storer : cache_storers_)
-        storer->NoteReportedDecl(decl);
-      Base::ReportDeclUseWithComment(caller_loc(), decl, comment);
+        storer->NoteReportedDecl(decl, parent_type);
+      Base::ReportDeclUseWithComment(caller_loc(), decl, parent_type, comment);
     }
   }
 
@@ -3626,7 +3629,7 @@ class IwyuAstConsumer
 
   bool VisitNamespaceAliasDecl(clang::NamespaceAliasDecl* decl) {
     if (CanIgnoreCurrentASTNode())  return true;
-    ReportDeclUse(CurrentLoc(), decl->getNamespace());
+    ReportDeclUse(CurrentLoc(), decl->getNamespace(), nullptr);
     return Base::VisitNamespaceAliasDecl(decl);
   }
 
@@ -3788,9 +3791,9 @@ class IwyuAstConsumer
     // actual decl will be reported by obtaining it from the UsingShadowDecl
     // once we've tracked the UsingDecl use.
     if (const UsingShadowDecl* found_decl = DynCastFrom(expr->getFoundDecl())) {
-      ReportDeclUse(CurrentLoc(), found_decl);
+      ReportDeclUse(CurrentLoc(), found_decl, nullptr);
     } else {
-      ReportDeclUse(CurrentLoc(), expr->getDecl());
+      ReportDeclUse(CurrentLoc(), expr->getDecl(), nullptr);
     }
     return Base::VisitDeclRefExpr(expr);
   }
@@ -3829,7 +3832,7 @@ class IwyuAstConsumer
     if (CanForwardDeclareType(current_ast_node())) {
       ReportDeclForwardDeclareUse(CurrentLoc(), type->getDecl());
     } else {
-      ReportDeclUse(CurrentLoc(), type->getDecl());
+      ReportDeclUse(CurrentLoc(), type->getDecl(), nullptr);
     }
     return Base::VisitTypedefType(type);
   }
@@ -3867,7 +3870,7 @@ class IwyuAstConsumer
     }
 
     // OK, seems to be a use that requires the full type.
-    ReportDeclUse(CurrentLoc(), type->getDecl());
+    ReportDeclUse(CurrentLoc(), type->getDecl(), nullptr);
     return Base::VisitTagType(type);
   }
 
@@ -3909,7 +3912,8 @@ class IwyuAstConsumer
     // type info.
     if (IsDefaultTemplateTemplateArg(current_ast_node())) {
       current_ast_node()->set_in_forward_declare_context(false);
-      ReportDeclUse(CurrentLoc(), template_name.getAsTemplateDecl());
+      ReportDeclUse(CurrentLoc(), template_name.getAsTemplateDecl(),
+                    nullptr);
     }
     return true;
   }

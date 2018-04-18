@@ -52,6 +52,8 @@ using clang::RecordDecl;
 using clang::SourceLocation;
 using clang::SourceRange;
 using clang::TemplateDecl;
+using clang::Type;
+using clang::TypeDecl;
 using clang::UsingDecl;
 using llvm::cast;
 using llvm::errs;
@@ -236,8 +238,8 @@ string GetShortNameAsString(const clang::NamedDecl* named_decl) {
 }  // namespace internal
 
 // Holds information about a single full or fwd-decl use of a symbol.
-OneUse::OneUse(const NamedDecl* decl, SourceLocation use_loc,
-               OneUse::UseKind use_kind, UseFlags flags,
+OneUse::OneUse(const NamedDecl* decl, const TypeDecl* parent_decl,
+               SourceLocation use_loc, OneUse::UseKind use_kind, UseFlags flags,
                const char* comment)
     : symbol_name_(internal::GetQualifiedNameAsString(decl)),
       short_symbol_name_(internal::GetShortNameAsString(decl)),
@@ -245,13 +247,13 @@ OneUse::OneUse(const NamedDecl* decl, SourceLocation use_loc,
       decl_loc_(GetInstantiationLoc(GetLocation(decl))),
       decl_file_(GetFileEntry(decl_loc_)),
       decl_filepath_(GetFilePath(decl_file_)),
+      parent_decl_(parent_decl),
       use_loc_(use_loc),
-      use_kind_(use_kind),             // full use or fwd-declare use
+      use_kind_(use_kind),  // full use or fwd-declare use
       use_flags_(flags),
       comment_(comment ? comment : ""),
       ignore_use_(false),
-      is_iwyu_violation_(false) {
-}
+      is_iwyu_violation_(false) {}
 
 // This constructor always creates a full use.
 OneUse::OneUse(const string& symbol_name, const FileEntry* dfn_file,
@@ -261,6 +263,7 @@ OneUse::OneUse(const string& symbol_name, const FileEntry* dfn_file,
       decl_(nullptr),
       decl_file_(dfn_file),
       decl_filepath_(dfn_filepath),
+      parent_decl_(nullptr),
       use_loc_(use_loc),
       use_kind_(kFullUse),
       use_flags_(UF_None),
@@ -574,6 +577,7 @@ static void LogSymbolUse(const string& prefix, const OneUse& use) {
 
 void IwyuFileInfo::ReportFullSymbolUse(SourceLocation use_loc,
                                        const NamedDecl* decl,
+                                       const Type* parent_type,
                                        UseFlags flags,
                                        const char* comment) {
   if (decl) {
@@ -584,8 +588,11 @@ void IwyuFileInfo::ReportFullSymbolUse(SourceLocation use_loc,
       decl = GetDefinitionAsWritten(decl);
     }
 
-    symbol_uses_.push_back(OneUse(decl, use_loc, OneUse::kFullUse,
-                                  flags, comment));
+    const TypeDecl* parent_decl =
+        DynCastFrom(parent_type ? TypeToDeclAsWritten(parent_type) : nullptr);
+
+    symbol_uses_.push_back(
+        OneUse(decl, parent_decl, use_loc, OneUse::kFullUse, flags, comment));
     LogSymbolUse("Marked full-info use of decl", symbol_uses_.back());
   }
 }
@@ -630,8 +637,8 @@ void IwyuFileInfo::ReportForwardDeclareUse(SourceLocation use_loc,
   // combines friend decls with true forward-declare decls.  If that
   // happened here, replace the friend with a real fwd decl.
   decl = GetNonfriendClassRedecl(decl);
-  symbol_uses_.push_back(OneUse(decl, use_loc, OneUse::kForwardDeclareUse,
-                                flags, comment));
+  symbol_uses_.push_back(OneUse(decl, nullptr, use_loc,
+                                OneUse::kForwardDeclareUse, flags, comment));
   LogSymbolUse("Marked fwd-decl use of decl", symbol_uses_.back());
 }
 
@@ -653,7 +660,7 @@ void IwyuFileInfo::ReportUsingDeclUse(SourceLocation use_loc,
   // When a symbol is accessed through a using decl, we must report
   // that as a full use of the using decl because whatever file that
   // using decl is in is now required.
-  ReportFullSymbolUse(use_loc, using_decl, flags, comment);
+  ReportFullSymbolUse(use_loc, using_decl, nullptr, flags, comment);
 }
 
 // Given a collection of symbol-uses for symbols defined in various
