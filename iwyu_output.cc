@@ -1147,14 +1147,23 @@ void ProcessFullUse(OneUse* use,
   }
 
   // (B4) Discard symbol uses for member functions in the same file as parent.
-  if (const CXXMethodDecl* method_dfn = DynCastFrom(use->decl())) {
-    // See if we also recorded a use of the parent.
-    const NamedDecl* parent_dfn
-        = GetDefinitionAsWritten(method_dfn->getParent());
+  if (use->parent_decl() || isa<CXXMethodDecl>(use->decl())) {
+    
+    const NamedDecl* parent_dfn =
+        use->parent_decl() ? use->parent_decl()
+                           : GetDefinitionAsWritten(
+                                 cast<CXXMethodDecl>(use->decl())->getParent());
+
+    const NamedDecl* parent_canonical_dfn = parent_dfn;
+    if (use->parent_decl()) {
+      if (const auto* canTypeDecl = TypeToDeclAsWritten(
+              GetCanonicalType(GetTypeOf(use->parent_decl()))))
+        parent_canonical_dfn = canTypeDecl;
+    }
 
     const FileEntry* decl_file_entry = GetFileEntry(use->decl_loc());
     const FileEntry* parent_file_entry =
-        GetFileEntry(GetInstantiationLoc(GetLocation(parent_dfn)));
+        GetFileEntry(GetInstantiationLoc(GetLocation(parent_canonical_dfn)));
 
     // We want to map the definition-files to their public headers if
     // they're private headers (so bits/stl_vector.h and
@@ -1171,16 +1180,20 @@ void ProcessFullUse(OneUse* use,
     bool same_file;
     if (method_dfn_files.size() == 1 && parent_dfn_files.size() == 1) {
       same_file = (method_dfn_files[0] == parent_dfn_files[0]);
-    } else {
-      // Fall back on just checking the filenames: can't figure out public.
-      same_file = (decl_file_entry == parent_file_entry);
-    }
-    if (same_file) {
-      VERRS(6) << "Ignoring use of " << use->symbol_name()
-               << " (" << use->PrintableUseLoc() << "): member of class\n";
-      use->set_ignore_use();
-      return;
-    }
+      } else {
+        // Fall back on just checking the filenames: can't figure out public.
+        same_file = (decl_file_entry == parent_file_entry);
+      }
+      if (same_file) {
+        OneUse parent_use(parent_dfn, nullptr, use->use_loc(), OneUse::kFullUse,
+                          UF_None, nullptr);
+
+        VERRS(6) << "Converting use of " << use->symbol_name() << " to "
+                 << parent_use.symbol_name() << " (" << use->PrintableUseLoc()
+                 << "): member of class\n";
+        *use = parent_use;
+        return;
+      }
   }
 
   // (B5) Discard uses of symbols that form a 'backwards' #include.
