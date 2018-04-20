@@ -1072,6 +1072,12 @@ bool DeclsAreInSameClass(const Decl* decl1, const Decl* decl2) {
 
 const Type* GetTypeOf(const Expr* expr) {
   return expr->getType().getTypePtr();
+
+  if (const CallExpr* call = DynCastFrom(expr)) {
+    if (const auto func = call->getDirectCallee())
+      return func->getReturnType().getTypePtr();
+  }
+
 }
 
 const Type* GetTypeOf(const CXXConstructExpr* expr) {
